@@ -1,0 +1,5 @@
+# Copy to local.properties and fill in values on your machine.
+sdk.dir=C:/Users/YOUR_USER/AppData/Local/Android/Sdk
+OPENAI_API_KEY=
+SUPABASE_URL=
+SUPABASE_ANON_KEY=

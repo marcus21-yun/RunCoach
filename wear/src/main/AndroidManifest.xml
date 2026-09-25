@@ -1,0 +1,63 @@
+<?xml version="1.0" encoding="utf-8"?>
+<manifest xmlns:android="http://schemas.android.com/apk/res/android">
+
+    <!-- 센서 권한 -->
+    <uses-permission android:name="android.permission.BODY_SENSORS" />
+    <uses-permission android:name="android.permission.BODY_SENSORS_BACKGROUND" />
+    <uses-permission android:name="android.permission.ACTIVITY_RECOGNITION" />
+
+    <!-- 위치 권한 (GPS 기반 거리/페이스) -->
+    <uses-permission android:name="android.permission.ACCESS_FINE_LOCATION" />
+
+    <!-- 서비스 권한 -->
+    <uses-permission android:name="android.permission.FOREGROUND_SERVICE" />
+    <uses-permission android:name="android.permission.FOREGROUND_SERVICE_HEALTH" />
+    <uses-permission android:name="android.permission.FOREGROUND_SERVICE_LOCATION" />
+
+    <!-- 기타 -->
+    <uses-permission android:name="android.permission.VIBRATE" />
+    <uses-permission android:name="android.permission.WAKE_LOCK" />
+    <uses-permission android:name="android.permission.INTERNET" />
+
+    <!-- Wear OS 필수 선언 -->
+    <uses-feature android:name="android.hardware.type.watch" />
+
+    <application
+        android:name=".WearApplication"
+        android:allowBackup="true"
+        android:label="RunCoach"
+        android:theme="@android:style/Theme.DeviceDefault">
+
+        <!-- ★ 워치 메인 액티비티 (런처) -->
+        <activity
+            android:name=".WearMainActivity"
+            android:exported="true">
+            <intent-filter>
+                <action android:name="android.intent.action.MAIN" />
+                <category android:name="android.intent.category.LAUNCHER" />
+            </intent-filter>
+        </activity>
+
+        <!-- ★ 러닝 중 실시간 센서 수집 서비스 -->
+        <service
+            android:name=".sensor.WearRunningService"
+            android:foregroundServiceType="location|health"
+            android:exported="false" />
+
+        <!-- ★ 폰 → 워치 메시지 수신 (목표 / 기록 / 주간 알람) -->
+        <service
+            android:name=".listener.PhoneMessageListenerService"
+            android:exported="true">
+            <intent-filter>
+                <action android:name="com.google.android.gms.wearable.MESSAGE_RECEIVED" />
+                <!-- 모든 경로 수신 (/ 로 시작하는 전체) -->
+                <data
+                    android:scheme="wear"
+                    android:host="*"
+                    android:pathPrefix="/" />
+            </intent-filter>
+        </service>
+
+    </application>
+
+</manifest>
