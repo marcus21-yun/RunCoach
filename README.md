@@ -2,6 +2,7 @@
 
 > 2026-09-26 저장소 정리: 현재 소스는 `app/`, `wear/`, `core/`와 `supabase/`에 있습니다.
 > 다음 개발 방향은 [기능 개선 계획](docs/IMPROVEMENT_ROADMAP.md)을 참고하세요.
+> 핵심 제안은 [차별화 전략과 실행 제안](docs/DIFFERENTIATION_STRATEGY.md)에 정리했습니다.
 > 아래 설명은 기존 개발 기록이므로 현재 구현과 일부 다를 수 있습니다.
 >
 > 로컬 설정: `local.properties.example`을 `local.properties`로 복사해 SDK 경로와 키를 입력하세요.
@@ -42,12 +43,12 @@
 
 | 파일 | 내용 | 상태 |
 |------|------|------|
-| [2_RunCoach-Screen-Flow.md](.claude/MVP/2_RunCoach-Screen-Flow.md) | 전체 화면 흐름도 | 업데이트 필요 |
-| [3_RunCoach-Watch-Wireframe.md](.claude/MVP/3_RunCoach-Watch-Wireframe.md) | 워치 알람 와이어프레임 | 유효 |
-| [4_RunCoach-Home-Wireframe.md](.claude/MVP/4_RunCoach-Home-Wireframe.md) | 폰 앱 와이어프레임 | → 워치로 전환 필요 |
-| [5_RunCoach-AI-Logic.md](.claude/MVP/5_RunCoach-AI-Logic.md) | AI 목표 제안 로직 | 유효 |
-| [6_RunCoach-SamsungHealth-SDK.md](.claude/MVP/6_RunCoach-SamsungHealth-SDK.md) | Samsung Health SDK | 유효 |
-| [7_RunCoach-TechStack-MVP.md](.claude/MVP/7_RunCoach-TechStack-MVP.md) | 기술 스택 및 MVP | 업데이트 필요 |
+| 2_RunCoach-Screen-Flow.md (original local reference unavailable) | 전체 화면 흐름도 | 업데이트 필요 |
+| 3_RunCoach-Watch-Wireframe.md (original local reference unavailable) | 워치 알람 와이어프레임 | 유효 |
+| 4_RunCoach-Home-Wireframe.md (original local reference unavailable) | 폰 앱 와이어프레임 | → 워치로 전환 필요 |
+| 5_RunCoach-AI-Logic.md (original local reference unavailable) | AI 목표 제안 로직 | 유효 |
+| 6_RunCoach-SamsungHealth-SDK.md (original local reference unavailable) | Samsung Health SDK | 유효 |
+| 7_RunCoach-TechStack-MVP.md (original local reference unavailable) | 기술 스택 및 MVP | 업데이트 필요 |
 
 ---
 
