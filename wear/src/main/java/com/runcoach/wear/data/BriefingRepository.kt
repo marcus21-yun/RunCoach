@@ -35,7 +35,7 @@ class BriefingRepository(
 
     suspend fun loadCoachStyle(): CoachStyle {
         val prefs = context.briefingDataStore.data.first()
-        return CoachStyle.fromId(prefs[KEY_COACH_STYLE] ?: CoachStyle.CUTE.id)
+        return CoachStyle.fromId(prefs[KEY_COACH_STYLE] ?: CoachStyle.MOM.id)
     }
 
     // ── 사전 브리핑 ───────────────────────────────────────────────

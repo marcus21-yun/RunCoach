@@ -68,6 +68,7 @@ fun RunningScreen(
 
     val state by viewModel.uiState.collectAsState()
     val activeAlarm by viewModel.activeAlarm.collectAsState()
+    val coachMessage by viewModel.coachMessage.collectAsState()
     var runStarted by remember { mutableStateOf(false) }
     var permissionMessage by remember { mutableStateOf<String?>(null) }
 
@@ -168,11 +169,24 @@ fun RunningScreen(
             val ahead = state.diffFromLastKm >= 0
             val diffColor = if (ahead) RcColors.Success else RcColors.Danger
 
-            Text(
-                text = "${if (ahead) "▲" else "▼"} 지난 기록 대비 $diffText",
-                style = RcType.Label,
-                color = diffColor
-            )
+            // 코치가 방금 한 말이 있으면 기록 비교 대신 보여준다 (한 화면, 한 행동)
+            val coachLine = coachMessage
+            if (coachLine != null) {
+                Text(
+                    text = "🗣 $coachLine",
+                    style = RcType.Caption,
+                    color = RcColors.Accent,
+                    textAlign = TextAlign.Center,
+                    maxLines = 2,
+                    overflow = androidx.compose.ui.text.style.TextOverflow.Ellipsis
+                )
+            } else {
+                Text(
+                    text = "${if (ahead) "▲" else "▼"} 지난 기록 대비 $diffText",
+                    style = RcType.Label,
+                    color = diffColor
+                )
+            }
 
             Spacer(modifier = Modifier.height(6.dp))
 

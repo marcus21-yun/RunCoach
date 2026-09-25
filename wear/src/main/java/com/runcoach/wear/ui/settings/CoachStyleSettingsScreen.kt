@@ -43,7 +43,7 @@ class CoachStyleViewModel @Inject constructor(
         apiService = OpenAiApiService(apiKey = BuildConfig.OPENAI_API_KEY)
     )
 
-    private val _selectedStyle = MutableStateFlow(CoachStyle.CUTE)
+    private val _selectedStyle = MutableStateFlow(CoachStyle.MOM)
     val selectedStyle: StateFlow<CoachStyle> = _selectedStyle
 
     init {

@@ -13,6 +13,7 @@ import androidx.hilt.navigation.compose.hiltViewModel
 import androidx.wear.compose.material.*
 import androidx.compose.ui.text.style.TextAlign
 import com.runcoach.core.coach.Effort
+import com.runcoach.core.coach.Reflection
 import com.runcoach.wear.ui.prerun.StatItem
 import com.runcoach.wear.ui.theme.RcColors
 import com.runcoach.wear.ui.theme.RcType
@@ -127,6 +128,11 @@ fun PostRunScreen(
                     onSelect = viewModel::submitFeedback
                 )
             }
+        }
+
+        // 멘탈 코치 — 나의 패턴을 선수와 비교하고, 다른 사람과 나눌 이야깃거리 하나
+        state.reflection?.let { reflection ->
+            item { ReflectionCard(reflection) }
         }
 
         // AI 다음 목표 버튼
@@ -249,4 +255,36 @@ private fun effortColor(effort: Effort) = when (effort) {
     Effort.EASY -> RcColors.Success
     Effort.OK -> RcColors.Accent
     Effort.HARD -> RcColors.Warning
+}
+
+@Composable
+fun ReflectionCard(reflection: Reflection) {
+    val shape = androidx.compose.foundation.shape.RoundedCornerShape(16.dp)
+    Column(
+        modifier = Modifier
+            .fillMaxWidth()
+            .background(RcColors.SurfaceAlt, shape = shape)
+            .padding(10.dp)
+    ) {
+        Text("🧠 오늘의 이야깃거리", color = RcColors.Accent, style = RcType.Label)
+        Spacer(modifier = Modifier.height(4.dp))
+        Text(reflection.topic.observation, color = RcColors.TextBody, style = RcType.Caption)
+        Spacer(modifier = Modifier.height(4.dp))
+        Text(reflection.topic.askOthers, color = RcColors.TextPrimary, style = RcType.Caption, fontWeight = FontWeight.Bold)
+        Spacer(modifier = Modifier.height(4.dp))
+        Text(reflection.topic.askMyself, color = RcColors.TextSecondary, style = RcType.Caption)
+
+        // 선수들의 훈련 패턴과 나란히 — 생각해볼 만한 항목부터 최대 2개
+        reflection.comparisons.take(2).forEach { c ->
+            Spacer(modifier = Modifier.height(6.dp))
+            Text(
+                "${if (c.worthThinking) "🤔" else "👍"} ${c.topic}",
+                color = if (c.worthThinking) RcColors.Warning else RcColors.Success,
+                style = RcType.Caption,
+                fontWeight = FontWeight.Bold
+            )
+            Text("선수: ${c.athlete}", color = RcColors.TextSecondary, style = RcType.Caption)
+            Text("나: ${c.me}", color = RcColors.TextBody, style = RcType.Caption)
+        }
+    }
 }

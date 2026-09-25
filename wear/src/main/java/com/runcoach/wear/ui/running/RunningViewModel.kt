@@ -50,6 +50,12 @@ class RunningViewModel @Inject constructor(
     // WearRunningService가 운동 종료 시 채워주는 결과 — PostBriefing에서 사용
     val runResult = repository.completedResult
 
+    // 습관 코치가 마지막으로 한 말 — 소리를 놓쳤을 때 화면으로 확인
+    val coachMessage = repository.coachMessage
+
+    // 같은 종류의 화면 알림은 30초에 한 번만 (센서 업데이트마다 진동하던 문제 방지)
+    private val lastAlarmAt = mutableMapOf<AlarmType, Long>()
+
     private var lastDistanceMilestone = 0
     private var speedupAlarmFired = false
     private var maxHeartRate = 0
@@ -130,21 +136,14 @@ class RunningViewModel @Inject constructor(
             return
         }
 
-        // 4순위: 페이스 이탈 (목표보다 10% 느림)
-        // 단, 실제로 이동 중(유효 페이스)일 때만 — 정지/ GPS 미수신 시 paceSeconds=MAX_VALUE 로
-        // 경보가 매초 오발동하는 것을 방지
-        val targetSec = paceStringToSeconds(goal.targetPace)
-        val hasValidPace = data.paceSeconds in 1 until Int.MAX_VALUE && data.distanceKm > 0f
-        if (targetSec > 0 && hasValidPace && data.paceSeconds > targetSec * 1.1) {
-            triggerAlarm(
-                type    = AlarmType.PACE_DROP,
-                title   = "페이스 저하",
-                message = "${data.pacePerKm} 🔴\n힘내세요!"
-            )
-        }
+        // 페이스 이탈 안내는 습관 코치(WearRunningService → RunHabitCoach)가 음성으로 담당한다.
+        // 숨이 찬 동안에는 재촉하지 않도록 심박 조건을 함께 보기 때문에 화면 알림은 두지 않는다.
     }
 
     private fun triggerAlarm(type: AlarmType, title: String, message: String) {
+        val now = System.currentTimeMillis()
+        if (now - (lastAlarmAt[type] ?: 0L) < 30_000L) return
+        lastAlarmAt[type] = now
         viewModelScope.launch {
             alarmManager.vibrate(type)
             _activeAlarm.value = AlarmEvent(type, title, message)

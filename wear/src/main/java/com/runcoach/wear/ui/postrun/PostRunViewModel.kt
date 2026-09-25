@@ -3,6 +3,10 @@ package com.runcoach.wear.ui.postrun
 import androidx.lifecycle.ViewModel
 import androidx.lifecycle.viewModelScope
 import com.runcoach.core.coach.Effort
+import com.runcoach.core.coach.PatternRun
+import com.runcoach.core.coach.Reflection
+import com.runcoach.core.coach.ReflectionCoach
+import com.runcoach.core.coach.RunPatternAnalyzer
 import com.runcoach.wear.data.CoachPlanner
 import com.runcoach.wear.data.WearDataStore
 import com.runcoach.wear.sensor.RunningRepository
@@ -29,7 +33,9 @@ data class PostRunUiState(
     // 기억하는 코치: 체감 피드백
     val recordId: String? = null,
     val selectedEffort: Effort? = null,
-    val coachHeadline: String? = null
+    val coachHeadline: String? = null,
+    // 멘탈 코치: 선수 패턴과의 비교 + 대화 주제
+    val reflection: Reflection? = null
 )
 
 @HiltViewModel
@@ -66,7 +72,14 @@ class PostRunViewModel @Inject constructor(
             diffPacePos   = isPaceFaster(result?.avgPace, previous?.avgPace),
             recordId      = current?.id,
             selectedEffort = effort,
-            coachHeadline = if (effort != null && cache.coachReasons.isNotEmpty()) cache.aiMessage else null
+            coachHeadline = if (effort != null && cache.coachReasons.isNotEmpty()) cache.aiMessage else null,
+            reflection    = ReflectionCoach.reflect(
+                RunPatternAnalyzer.profile(
+                    cache.recentRecords.map {
+                        PatternRun(it.date, it.distanceKm, it.durationSec, it.avgHeartRate, it.splitsSec)
+                    }
+                )
+            )
         )
     }.stateIn(viewModelScope, SharingStarted.WhileSubscribed(5000), PostRunUiState())
 

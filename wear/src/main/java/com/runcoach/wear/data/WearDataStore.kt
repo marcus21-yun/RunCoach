@@ -31,7 +31,11 @@ data class CachedRecord(
     val completed: Boolean,
     val source: String = "watch",
     /** 사용자가 고른 체감 난이도 (Effort.id). 미응답이면 null. */
-    val effort: String? = null
+    val effort: String? = null,
+    /** 1km 구간별 소요 시간(초) */
+    val splitsSec: List<Int> = emptyList(),
+    /** 초반보다 느려지기 시작한 km 지점 (RunPatternAnalyzer.slowdownKm) */
+    val slowdownKm: Float? = null
 )
 
 data class CachedGoal(
@@ -303,7 +307,11 @@ class WearDataStore @Inject constructor(
                 fatigueLevel = obj.optString("fatigueLevel", "low"),
                 completed = obj.getBoolean("completed"),
                 source = obj.optString("source", "watch"),
-                effort = obj.optString("effort").takeIf { it.isNotBlank() }
+                effort = obj.optString("effort").takeIf { it.isNotBlank() },
+                splitsSec = obj.optJSONArray("splitsSec")?.let { arr ->
+                    (0 until arr.length()).map { arr.getInt(it) }
+                }.orEmpty(),
+                slowdownKm = if (obj.has("slowdownKm")) obj.getDouble("slowdownKm").toFloat() else null
             )
         }
     }.getOrDefault(emptyList())
@@ -343,6 +351,8 @@ class WearDataStore @Inject constructor(
                     put("completed", record.completed)
                     put("source", record.source)
                     record.effort?.let { put("effort", it) }
+                    if (record.splitsSec.isNotEmpty()) put("splitsSec", JSONArray(record.splitsSec))
+                    record.slowdownKm?.let { put("slowdownKm", it.toDouble()) }
                 }
             )
         }

@@ -19,12 +19,20 @@ import androidx.health.services.client.data.WarmUpConfig
 import androidx.lifecycle.LifecycleService
 import androidx.lifecycle.lifecycleScope
 import com.google.android.gms.wearable.Wearable
-import com.runcoach.core.HrZone
-import com.runcoach.core.getHrZone
+import com.runcoach.core.coach.HabitCoachConfig
+import com.runcoach.core.coach.HabitPhrasebook
+import com.runcoach.core.coach.HabitSample
+import com.runcoach.core.coach.RunHabitCoach
+import com.runcoach.core.coach.RunPatternAnalyzer
+import com.runcoach.core.coach.paceToSecondsOrNull
+import com.runcoach.wear.BuildConfig
+import com.runcoach.wear.data.BriefingRepository
 import com.runcoach.wear.data.CachedGoal
 import com.runcoach.wear.data.CachedRecord
 import com.runcoach.wear.data.WearDataStore
+import com.runcoach.wear.data.api.OpenAiApiService
 import com.runcoach.wear.data.model.CoachStyle
+import com.runcoach.wear.data.model.habitTone
 import com.runcoach.wear.tts.BriefingTtsManager
 import dagger.hilt.android.AndroidEntryPoint
 import kotlinx.coroutines.guava.await
@@ -60,11 +68,14 @@ class WearRunningService : LifecycleService() {
     private val heartRateSamples = mutableListOf<Int>()
     private var startTimeMs = 0L
 
-    // 실시간 HR 코칭
-    private var hrCoachingTts: BriefingTtsManager? = null
-    private var lastHrZone: HrZone = HrZone.SAFE
-    private var lastCoachingTimeMs: Long = 0L
-    private val coachingCooldownMs = 30_000L  // 30초 쿨다운
+    // 러닝 중 습관 코치 (호흡·페이스·자세 잔소리)
+    private var coachTts: BriefingTtsManager? = null
+    private var habitCoach: RunHabitCoach? = null
+    private var coachStyle: CoachStyle = CoachStyle.MOM
+
+    // 1km 구간 기록 — 다음 러닝에서 "지난번 처졌던 지점"을 알려주는 근거
+    private val splitsSec = mutableListOf<Int>()
+    private var lastSplitElapsedSec = 0
 
     companion object {
         private const val TAG = "RunCoachWear"
@@ -113,7 +124,15 @@ class WearRunningService : LifecycleService() {
                 )
             )
 
-            checkAndCoachHrZone(hr)
+            recordSplit(distanceM / 1000.0, elapsedSec)
+            coachHabit(
+                HabitSample(
+                    elapsedSec = elapsedSec,
+                    distanceKm = (distanceM / 1000).toFloat(),
+                    paceSec = speedToPaceSeconds(speedMps).takeIf { it != Int.MAX_VALUE },
+                    bpm = hr
+                )
+            )
         }
 
         override fun onLapSummaryReceived(lapSummary: ExerciseLapSummary) = Unit
@@ -135,12 +154,12 @@ class WearRunningService : LifecycleService() {
     override fun onCreate() {
         super.onCreate()
         createNotificationChannel()
-        hrCoachingTts = BriefingTtsManager(this)
+        coachTts = BriefingTtsManager(this)
     }
 
     override fun onDestroy() {
-        hrCoachingTts?.release()
-        hrCoachingTts = null
+        coachTts?.release()
+        coachTts = null
         super.onDestroy()
     }
 
@@ -157,11 +176,15 @@ class WearRunningService : LifecycleService() {
     private fun startTracking() {
         startTimeMs = System.currentTimeMillis()
         heartRateSamples.clear()
+        splitsSec.clear()
+        lastSplitElapsedSec = 0
+        habitCoach = null
         repository.reset()
         Log.d(TAG, "startTracking")
         startForeground(NOTIF_ID, buildNotification("러닝 측정 중"))
 
         lifecycleScope.launch {
+            prepareHabitCoach()
             val exerciseClient = HealthServices.getClient(this@WearRunningService).exerciseClient
 
             val config = ExerciseConfig.builder(ExerciseType.RUNNING)
@@ -240,7 +263,9 @@ class WearRunningService : LifecycleService() {
                     durationSec = result.durationSec,
                     fatigueLevel = result.fatigueLevel,
                     completed = result.completed,
-                    source = "watch"
+                    source = "watch",
+                    splitsSec = splitsSec.toList(),
+                    slowdownKm = RunPatternAnalyzer.slowdownKm(splitsSec)
                 )
             )
             Log.d(TAG, "record saved id=$finishedAt")
@@ -278,31 +303,41 @@ class WearRunningService : LifecycleService() {
         }
     }
 
-    private fun checkAndCoachHrZone(bpm: Int) {
-        val zone = getHrZone(bpm)
-        val now = System.currentTimeMillis()
-        val cooldownPassed = (now - lastCoachingTimeMs) >= coachingCooldownMs
+    /** 최근 기록의 반복 패턴과 선택한 코치 말투로 이번 러닝의 습관 코치를 준비한다. */
+    private suspend fun prepareHabitCoach() {
+        val goal = dataStore.getCurrentGoalSync()
+        val pattern = RunPatternAnalyzer.slowdownPattern(
+            dataStore.getRecordsSync().map { it.slowdownKm }
+        )
+        coachStyle = runCatching {
+            BriefingRepository(this, OpenAiApiService(apiKey = BuildConfig.OPENAI_API_KEY)).loadCoachStyle()
+        }.getOrDefault(CoachStyle.MOM)
+        habitCoach = RunHabitCoach(
+            config = HabitCoachConfig(),
+            targetPaceSec = paceToSecondsOrNull(goal?.targetPace),
+            targetKm = goal?.targetKm,
+            pattern = pattern
+        )
+        Log.d(TAG, "habitCoach ready style=${coachStyle.id} pattern=$pattern")
+    }
 
-        // 존이 악화됐거나(SAFE→CAUTION, CAUTION→DANGER), 쿨다운 후 DANGER 지속 시 재코칭
-        val shouldCoach = when {
-            zone == HrZone.DANGER && lastHrZone != HrZone.DANGER -> true
-            zone == HrZone.CAUTION && lastHrZone == HrZone.SAFE -> true
-            zone == HrZone.DANGER && cooldownPassed -> true
-            else -> false
-        }
+    private fun coachHabit(sample: HabitSample) {
+        val cue = habitCoach?.onSample(sample) ?: return
+        val message = HabitPhrasebook.text(cue, coachStyle.habitTone)
+        Log.d(TAG, "habitCue ${cue.type} message=$message")
+        repository.updateCoachMessage(message)
+        coachTts?.speak(message, coachStyle)
+    }
 
-        if (shouldCoach) {
-            val message = when (zone) {
-                HrZone.DANGER -> "심박수가 너무 높습니다. 잠깐 걷기로 전환하세요!"
-                HrZone.CAUTION -> "조금 힘드시죠? 페이스를 약간 줄이세요."
-                HrZone.SAFE -> return
-            }
-            Log.d(TAG, "hrCoach zone=$zone bpm=$bpm message=$message")
-            hrCoachingTts?.speak(message, CoachStyle.ANNOUNCER)
-            lastCoachingTimeMs = now
-        }
-
-        lastHrZone = zone
+    /** km 경계를 넘을 때마다 해당 구간 소요 시간을 기록한다. */
+    private fun recordSplit(distanceKm: Double, elapsedSec: Int) {
+        val completedKm = distanceKm.toInt()
+        val crossed = completedKm - splitsSec.size
+        if (crossed <= 0) return
+        // GPS 튐으로 한 번에 여러 km를 넘으면 경과 시간을 균등하게 나눈다
+        val each = (elapsedSec - lastSplitElapsedSec) / crossed
+        repeat(crossed) { splitsSec.add(each) }
+        lastSplitElapsedSec = elapsedSec
     }
 
     private fun speedToPace(speedMps: Double): String {

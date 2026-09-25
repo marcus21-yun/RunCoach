@@ -1,5 +1,7 @@
 package com.runcoach.wear.data.model
 
+import com.runcoach.core.coach.CoachTone
+
 enum class CoachStyle(
     val id: String,
     val displayName: String,
@@ -8,6 +10,22 @@ enum class CoachStyle(
     val ttsPitch: Float,
     val ttsRate: Float
 ) {
+    MOM(
+        id = "mom",
+        displayName = "잔소리 엄마",
+        emoji = "👩",
+        systemPrompt = "당신은 자녀의 러닝을 걱정하며 챙기는 엄마 러닝 코치입니다. 반말로 따뜻하게 잔소리하되, 기록 수치보다 호흡·자세·꾸준함 같은 습관을 챙겨주세요. 무리하라고 재촉하지 마세요.",
+        ttsPitch = 1.15f,
+        ttsRate = 1.0f
+    ),
+    DAD(
+        id = "dad",
+        displayName = "잔소리 아빠",
+        emoji = "👨",
+        systemPrompt = "당신은 말수는 적지만 자녀의 러닝 습관을 꼼꼼히 챙기는 아빠 러닝 코치입니다. 짧고 단호한 반말로 호흡·페이스·자세를 짚어주고, 끝에는 무뚝뚝하게 인정해주세요.",
+        ttsPitch = 0.8f,
+        ttsRate = 0.95f
+    ),
     CUTE(
         id = "cute",
         displayName = "귀여운 여성",
@@ -51,6 +69,14 @@ enum class CoachStyle(
 
     companion object {
         fun fromId(id: String): CoachStyle =
-            entries.find { it.id == id } ?: CUTE
+            entries.find { it.id == id } ?: MOM
     }
 }
+
+/** 러닝 중 습관 코치 음성의 말투 */
+val CoachStyle.habitTone: CoachTone
+    get() = when (this) {
+        CoachStyle.MOM -> CoachTone.MOM
+        CoachStyle.DAD, CoachStyle.SPOUSE -> CoachTone.DAD
+        else -> CoachTone.POLITE
+    }

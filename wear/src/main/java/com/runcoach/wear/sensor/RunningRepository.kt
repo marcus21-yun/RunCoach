@@ -24,6 +24,14 @@ class RunningRepository @Inject constructor() {
     private val _gpsReady = MutableStateFlow(false)
     val gpsReady: StateFlow<Boolean> = _gpsReady.asStateFlow()
 
+    // 습관 코치가 마지막으로 말한 문장 (소리를 못 들었을 때 화면으로 확인)
+    private val _coachMessage = MutableStateFlow<String?>(null)
+    val coachMessage: StateFlow<String?> = _coachMessage.asStateFlow()
+
+    fun updateCoachMessage(message: String) {
+        _coachMessage.value = message
+    }
+
     fun updateSensorData(data: SensorData) {
         _sensorData.value = data
     }
@@ -40,5 +48,6 @@ class RunningRepository @Inject constructor() {
         _sensorData.value = SensorData()
         _completedResult.value = null
         _gpsReady.value = false
+        _coachMessage.value = null
     }
 }
