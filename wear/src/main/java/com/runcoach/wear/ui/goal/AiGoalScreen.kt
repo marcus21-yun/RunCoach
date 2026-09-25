@@ -76,6 +76,27 @@ fun AiGoalScreen(
             }
         }
 
+        // 제안 근거 — 저장된 기록과 사용자 피드백에서 나온 사실만 표시
+        if (state.reasons.isNotEmpty()) {
+            item {
+                Column(
+                    modifier = Modifier
+                        .fillMaxWidth()
+                        .padding(horizontal = 4.dp, vertical = 2.dp)
+                ) {
+                    Text("이렇게 판단했어요", color = Color(0xFF4FC3F7), fontSize = 12.sp)
+                    state.reasons.forEach { reason ->
+                        Text(
+                            "· $reason",
+                            color = Color(0xFFE9ECF1),
+                            fontSize = 12.sp,
+                            lineHeight = 16.sp
+                        )
+                    }
+                }
+            }
+        }
+
         // 다음 주 제안 목표
         item {
             Card(

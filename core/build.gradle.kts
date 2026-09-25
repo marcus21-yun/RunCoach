@@ -23,4 +23,6 @@ android {
 dependencies {
     // 순수 Kotlin 도메인 로직만 — Android/Compose 의존성 없음
     implementation(libs.androidx.core.ktx)
+
+    testImplementation("junit:junit:4.13.2")
 }

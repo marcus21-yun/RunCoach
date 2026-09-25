@@ -16,7 +16,9 @@ data class AiGoalUiState(
     val nextPace: String = "--:--",
     val nextSpeedupKm: String = "-",
     val nextSpeedupPct: Int = 0,
-    val nextHrAlert: Int = 170
+    val nextHrAlert: Int = 170,
+    /** 기억하는 코치의 제안 근거 */
+    val reasons: List<String> = emptyList()
 )
 
 @HiltViewModel
@@ -32,7 +34,8 @@ class AiGoalViewModel @Inject constructor(
             nextPace      = goal?.targetPace ?: "--:--",
             nextSpeedupKm = "%.1f".format(goal?.speedupKm ?: 0f),
             nextSpeedupPct = goal?.speedupPct ?: 0,
-            nextHrAlert   = goal?.hrAlertBpm ?: 170
+            nextHrAlert   = goal?.hrAlertBpm ?: 170,
+            reasons       = cache.coachReasons
         )
     }.stateIn(viewModelScope, SharingStarted.WhileSubscribed(5000), AiGoalUiState())
 

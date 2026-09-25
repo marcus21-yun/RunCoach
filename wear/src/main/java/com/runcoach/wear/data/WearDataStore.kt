@@ -29,7 +29,9 @@ data class CachedRecord(
     val durationSec: Int = 0,
     val fatigueLevel: String = "low",
     val completed: Boolean,
-    val source: String = "watch"
+    val source: String = "watch",
+    /** 사용자가 고른 체감 난이도 (Effort.id). 미응답이면 null. */
+    val effort: String? = null
 )
 
 data class CachedGoal(
@@ -58,7 +60,9 @@ data class WearCache(
     val ownerId: String? = null,
     val phoneImportStatus: String? = null,
     val lastShareCode: String? = null,
-    val lastSharePayload: String? = null
+    val lastSharePayload: String? = null,
+    /** 기억하는 코치가 다음 목표를 제안한 근거 (폰 목표 수신 시 비움) */
+    val coachReasons: List<String> = emptyList()
 )
 
 private val Context.dataStore: DataStore<Preferences> by preferencesDataStore("wear_cache")
@@ -79,6 +83,7 @@ class WearDataStore @Inject constructor(
         val KEY_START_DATE = longPreferencesKey("start_date")
         val KEY_LAST_SHARE_CODE = stringPreferencesKey("last_share_code")
         val KEY_LAST_SHARE_PAYLOAD = stringPreferencesKey("last_share_payload")
+        val KEY_COACH_REASONS = stringPreferencesKey("coach_reasons")
 
         private const val MAX_RECORDS = 20
         private const val MAX_BRIEFINGS = 20
@@ -99,7 +104,8 @@ class WearDataStore @Inject constructor(
             ownerId = prefs[KEY_OWNER_ID],
             phoneImportStatus = prefs[KEY_PHONE_IMPORT_STATUS],
             lastShareCode = prefs[KEY_LAST_SHARE_CODE],
-            lastSharePayload = prefs[KEY_LAST_SHARE_PAYLOAD]
+            lastSharePayload = prefs[KEY_LAST_SHARE_PAYLOAD],
+            coachReasons = prefs[KEY_COACH_REASONS]?.let(::parseStrings).orEmpty()
         )
     }
 
@@ -110,6 +116,7 @@ class WearDataStore @Inject constructor(
     suspend fun saveGoalFromPhone(json: String) {
         context.dataStore.edit { prefs ->
             prefs[KEY_NEXT_GOAL] = json
+            prefs.remove(KEY_COACH_REASONS)
             runCatching {
                 val obj = JSONObject(json)
                 if (obj.has("aiMessage")) {
@@ -134,6 +141,33 @@ class WearDataStore @Inject constructor(
 
         context.dataStore.edit { prefs ->
             prefs[KEY_RECENT_RECORDS] = recordsToJson(updated)
+        }
+    }
+
+    /** 러닝 후 체감 난이도를 해당 기록에 저장한다. */
+    suspend fun saveRunFeedback(recordId: String, effortId: String) {
+        context.dataStore.edit { prefs ->
+            val records = prefs[KEY_RECENT_RECORDS]?.let(::parseRecords).orEmpty()
+            if (records.none { it.id == recordId }) return@edit
+            prefs[KEY_RECENT_RECORDS] = recordsToJson(
+                records.map { if (it.id == recordId) it.copy(effort = effortId) else it }
+            )
+        }
+    }
+
+    /** 워치에서 계산한 다음 목표와 근거를 저장한다 (폰 없이 동작). */
+    suspend fun saveCoachGoal(goal: CachedGoal, headline: String, reasons: List<String>) {
+        context.dataStore.edit { prefs ->
+            prefs[KEY_NEXT_GOAL] = JSONObject().apply {
+                put("targetKm", goal.targetKm.toDouble())
+                put("targetPace", goal.targetPace)
+                put("speedupKm", goal.speedupKm.toDouble())
+                put("speedupPct", goal.speedupPct)
+                put("hrAlertBpm", goal.hrAlertBpm)
+                put("aiMessage", headline)
+            }.toString()
+            prefs[KEY_AI_MESSAGE] = headline
+            prefs[KEY_COACH_REASONS] = JSONArray(reasons).toString()
         }
     }
 
@@ -268,9 +302,15 @@ class WearDataStore @Inject constructor(
                 durationSec = obj.optInt("durationSec", 0),
                 fatigueLevel = obj.optString("fatigueLevel", "low"),
                 completed = obj.getBoolean("completed"),
-                source = obj.optString("source", "watch")
+                source = obj.optString("source", "watch"),
+                effort = obj.optString("effort").takeIf { it.isNotBlank() }
             )
         }
+    }.getOrDefault(emptyList())
+
+    private fun parseStrings(json: String): List<String> = runCatching {
+        val array = JSONArray(json)
+        (0 until array.length()).map { array.getString(it) }
     }.getOrDefault(emptyList())
 
     private fun parseBriefings(json: String): List<BriefingRecord> = runCatching {
@@ -302,6 +342,7 @@ class WearDataStore @Inject constructor(
                     put("fatigueLevel", record.fatigueLevel)
                     put("completed", record.completed)
                     put("source", record.source)
+                    record.effort?.let { put("effort", it) }
                 }
             )
         }

@@ -18,7 +18,10 @@ data class PreRunUiState(
     val targetKm: String = "-",
     val targetPace: String = "--:--",
     val speedupKm: String = "-",
-    val speedupPct: Int = 0
+    val speedupPct: Int = 0,
+    // 기억하는 코치: 오늘 할 행동 + 이유 (수락한 목표가 코치 제안일 때만)
+    val coachHeadline: String? = null,
+    val coachReason: String? = null
 )
 
 @HiltViewModel
@@ -27,6 +30,8 @@ class PreRunViewModel @Inject constructor(
 ) : ViewModel() {
 
     val uiState = dataStore.getCachedData().map { cache ->
+        val fromCoach = cache.coachReasons.isNotEmpty() &&
+            cache.currentGoal != null && cache.currentGoal == cache.nextGoal
         PreRunUiState(
             lastDistanceKm = "%.1f".format(cache.lastRecord?.distanceKm ?: 0f),
             lastPace       = cache.lastRecord?.avgPace ?: "--:--",
@@ -34,7 +39,9 @@ class PreRunViewModel @Inject constructor(
             targetKm       = "%.1f".format(cache.currentGoal?.targetKm ?: 0f),
             targetPace     = cache.currentGoal?.targetPace ?: "--:--",
             speedupKm      = "%.1f".format(cache.currentGoal?.speedupKm ?: 0f),
-            speedupPct     = cache.currentGoal?.speedupPct ?: 0
+            speedupPct     = cache.currentGoal?.speedupPct ?: 0,
+            coachHeadline  = if (fromCoach) cache.aiMessage else null,
+            coachReason    = if (fromCoach) cache.coachReasons.firstOrNull() else null
         )
     }.stateIn(viewModelScope, SharingStarted.WhileSubscribed(5000), PreRunUiState())
 }

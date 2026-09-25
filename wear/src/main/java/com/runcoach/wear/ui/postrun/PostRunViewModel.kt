@@ -2,12 +2,16 @@ package com.runcoach.wear.ui.postrun
 
 import androidx.lifecycle.ViewModel
 import androidx.lifecycle.viewModelScope
+import com.runcoach.core.coach.Effort
+import com.runcoach.wear.data.CoachPlanner
 import com.runcoach.wear.data.WearDataStore
 import com.runcoach.wear.sensor.RunningRepository
 import dagger.hilt.android.lifecycle.HiltViewModel
 import kotlinx.coroutines.flow.SharingStarted
 import kotlinx.coroutines.flow.combine
+import kotlinx.coroutines.flow.first
 import kotlinx.coroutines.flow.stateIn
+import kotlinx.coroutines.launch
 import javax.inject.Inject
 
 data class PostRunUiState(
@@ -21,20 +25,29 @@ data class PostRunUiState(
     val diffDistance: String = "-",
     val diffDistancePos: Boolean = true,
     val diffPace: String = "-",
-    val diffPacePos: Boolean = true
+    val diffPacePos: Boolean = true,
+    // 기억하는 코치: 체감 피드백
+    val recordId: String? = null,
+    val selectedEffort: Effort? = null,
+    val coachHeadline: String? = null
 )
 
 @HiltViewModel
 class PostRunViewModel @Inject constructor(
     private val repository: RunningRepository,
-    private val dataStore: WearDataStore
+    private val dataStore: WearDataStore,
+    private val coachPlanner: CoachPlanner
 ) : ViewModel() {
 
     val uiState = combine(
         repository.completedResult,
         dataStore.getCachedData()
     ) { result, cache ->
-        val lastKm = cache.lastRecord?.distanceKm ?: 0f
+        // 방금 끝난 러닝은 이미 저장되어 recentRecords[0]에 있으므로, 비교 대상은 그 이전 기록이다.
+        val current = if (result != null) cache.recentRecords.firstOrNull() else null
+        val previous = if (result != null) cache.recentRecords.getOrNull(1) else cache.lastRecord
+        val effort = Effort.fromId(current?.effort)
+        val lastKm = previous?.distanceKm ?: 0f
         val distDiff = (result?.distanceKm ?: 0f) - lastKm
         val distDiffStr = if (distDiff >= 0) "+%.1fkm ↑".format(distDiff)
                           else "%.1fkm ↓".format(distDiff)
@@ -49,10 +62,33 @@ class PostRunViewModel @Inject constructor(
             completed     = result?.completed ?: false,
             diffDistance  = distDiffStr,
             diffDistancePos = distDiff >= 0,
-            diffPace      = calcPaceDiff(result?.avgPace, cache.lastRecord?.avgPace),
-            diffPacePos   = isPaceFaster(result?.avgPace, cache.lastRecord?.avgPace)
+            diffPace      = calcPaceDiff(result?.avgPace, previous?.avgPace),
+            diffPacePos   = isPaceFaster(result?.avgPace, previous?.avgPace),
+            recordId      = current?.id,
+            selectedEffort = effort,
+            coachHeadline = if (effort != null && cache.coachReasons.isNotEmpty()) cache.aiMessage else null
         )
     }.stateIn(viewModelScope, SharingStarted.WhileSubscribed(5000), PostRunUiState())
+
+    init {
+        // 워치 단독 모드: 피드백 전이라도 피로도 기준으로 다음 목표를 먼저 계산해 둔다.
+        // 폰이 보낸 미수락 목표가 있으면 덮어쓰지 않는다.
+        viewModelScope.launch {
+            val result = repository.completedResult.first() ?: return@launch
+            val cache = dataStore.getCachedData().first()
+            if (result.durationSec > 0 && (cache.nextGoal == null || cache.nextGoal == cache.currentGoal)) {
+                coachPlanner.replan()
+            }
+        }
+    }
+
+    /** 체감 난이도 저장 → 다음 목표를 워치에서 즉시 재계산 */
+    fun submitFeedback(effort: Effort) {
+        val recordId = uiState.value.recordId ?: return
+        viewModelScope.launch {
+            coachPlanner.submitFeedback(recordId, effort)
+        }
+    }
 
     private fun formatSeconds(sec: Int): String {
         val m = sec / 60; val s = sec % 60

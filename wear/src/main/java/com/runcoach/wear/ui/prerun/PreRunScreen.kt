@@ -50,6 +50,33 @@ fun PreRunScreen(
             }
         }
 
+        // 기억하는 코치 — 오늘 할 행동 하나와 그 이유
+        state.coachHeadline?.let { headline ->
+            item {
+                Column(
+                    modifier = Modifier
+                        .fillMaxWidth()
+                        .padding(horizontal = 4.dp, vertical = 2.dp),
+                    horizontalAlignment = Alignment.CenterHorizontally
+                ) {
+                    Text(
+                        headline,
+                        color = RcColors.TextPrimary,
+                        style = RcType.Label,
+                        textAlign = TextAlign.Center
+                    )
+                    state.coachReason?.let {
+                        Text(
+                            it,
+                            color = RcColors.TextSecondary,
+                            style = RcType.Caption,
+                            textAlign = TextAlign.Center
+                        )
+                    }
+                }
+            }
+        }
+
         // 지난주 기록
         item {
             Card(

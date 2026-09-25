@@ -11,6 +11,8 @@ import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import androidx.hilt.navigation.compose.hiltViewModel
 import androidx.wear.compose.material.*
+import androidx.compose.ui.text.style.TextAlign
+import com.runcoach.core.coach.Effort
 import com.runcoach.wear.ui.prerun.StatItem
 import com.runcoach.wear.ui.theme.RcColors
 import com.runcoach.wear.ui.theme.RcType
@@ -116,6 +118,17 @@ fun PostRunScreen(
             }
         }
 
+        // 기억하는 코치 — 체감 피드백 (한 번의 탭)
+        if (state.recordId != null) {
+            item {
+                EffortFeedbackCard(
+                    selected = state.selectedEffort,
+                    headline = state.coachHeadline,
+                    onSelect = viewModel::submitFeedback
+                )
+            }
+        }
+
         // AI 다음 목표 버튼
         item {
             Button(
@@ -165,4 +178,75 @@ fun fatigueColor(level: String) = when (level) {
     "high" -> Color(0xFFFF5252)
     "mid"  -> Color(0xFFFFAB40)
     else   -> Color(0xFF69F0AE)
+}
+
+@Composable
+fun EffortFeedbackCard(
+    selected: Effort?,
+    headline: String?,
+    onSelect: (Effort) -> Unit
+) {
+    Column(
+        modifier = Modifier
+            .fillMaxWidth()
+            .background(RcColors.Surface, shape = androidx.compose.foundation.shape.RoundedCornerShape(16.dp))
+            .padding(10.dp),
+        horizontalAlignment = Alignment.CenterHorizontally
+    ) {
+        Text(
+            if (selected == null) "오늘 어땠나요?" else "기억했어요 ✓",
+            color = RcColors.TextBody,
+            style = RcType.Label
+        )
+        Spacer(modifier = Modifier.height(6.dp))
+        Row(
+            modifier = Modifier.fillMaxWidth(),
+            horizontalArrangement = Arrangement.spacedBy(4.dp)
+        ) {
+            Effort.entries.forEach { effort ->
+                val isSelected = effort == selected
+                Chip(
+                    onClick = { onSelect(effort) },
+                    modifier = Modifier
+                        .weight(1f)
+                        .height(44.dp),
+                    colors = ChipDefaults.chipColors(
+                        backgroundColor = if (isSelected) effortColor(effort) else RcColors.SurfaceAlt
+                    ),
+                    contentPadding = PaddingValues(horizontal = 2.dp),
+                    label = {
+                        Text(
+                            effortShortLabel(effort),
+                            modifier = Modifier.fillMaxWidth(),
+                            textAlign = TextAlign.Center,
+                            style = RcType.Caption,
+                            color = if (isSelected) RcColors.Background else RcColors.TextBody,
+                            fontWeight = FontWeight.Bold
+                        )
+                    }
+                )
+            }
+        }
+        if (headline != null) {
+            Spacer(modifier = Modifier.height(6.dp))
+            Text(
+                headline,
+                color = RcColors.Accent,
+                style = RcType.Caption,
+                textAlign = TextAlign.Center
+            )
+        }
+    }
+}
+
+private fun effortShortLabel(effort: Effort) = when (effort) {
+    Effort.EASY -> "쉬움"
+    Effort.OK -> "적당"
+    Effort.HARD -> "힘듦"
+}
+
+private fun effortColor(effort: Effort) = when (effort) {
+    Effort.EASY -> RcColors.Success
+    Effort.OK -> RcColors.Accent
+    Effort.HARD -> RcColors.Warning
 }
