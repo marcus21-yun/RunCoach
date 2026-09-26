@@ -3,6 +3,7 @@ package com.runcoach.wear.data
 import com.runcoach.core.coach.CoachPlan
 import com.runcoach.core.coach.Effort
 import com.runcoach.core.coach.GoalSnapshot
+import com.runcoach.core.coach.LoadGuard
 import com.runcoach.core.coach.MemoryCoach
 import com.runcoach.core.coach.RunSnapshot
 import com.runcoach.core.coach.paceToSecondsOrNull
@@ -32,7 +33,9 @@ class CoachPlanner @Inject constructor(
             runs = cache.recentRecords.map { it.toSnapshot() },
             currentGoal = cache.currentGoal?.let {
                 GoalSnapshot(it.targetKm, paceToSecondsOrNull(it.targetPace))
-            }
+            },
+            // 이번 주 누적이 권장 상한을 넘지 않도록
+            load = LoadGuard.assess(cache.recentRecords.map { it.toPatternRun() }, cache.userAge)
         )
         dataStore.saveCoachGoal(
             goal = CachedGoal(

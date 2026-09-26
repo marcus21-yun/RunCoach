@@ -3,7 +3,9 @@ package com.runcoach.wear.ui.postrun
 import androidx.lifecycle.ViewModel
 import androidx.lifecycle.viewModelScope
 import com.runcoach.core.coach.Effort
-import com.runcoach.core.coach.PatternRun
+import com.runcoach.core.coach.LoadGuard
+import com.runcoach.core.coach.LoadStatus
+import com.runcoach.wear.data.toPatternRun
 import com.runcoach.core.coach.Reflection
 import com.runcoach.core.coach.ReflectionCoach
 import com.runcoach.core.coach.RunPatternAnalyzer
@@ -35,7 +37,10 @@ data class PostRunUiState(
     val selectedEffort: Effort? = null,
     val coachHeadline: String? = null,
     // 멘탈 코치: 선수 패턴과의 비교 + 대화 주제
-    val reflection: Reflection? = null
+    val reflection: Reflection? = null,
+    // 무리하지 않는 패턴: 수준 + 이번 주 누적 상태
+    val loadSummary: String? = null,
+    val loadWarning: Boolean = false
 )
 
 @HiltViewModel
@@ -53,6 +58,8 @@ class PostRunViewModel @Inject constructor(
         val current = if (result != null) cache.recentRecords.firstOrNull() else null
         val previous = if (result != null) cache.recentRecords.getOrNull(1) else cache.lastRecord
         val effort = Effort.fromId(current?.effort)
+        val patternRuns = cache.recentRecords.map { it.toPatternRun() }
+        val load = LoadGuard.assess(patternRuns, cache.userAge)
         val lastKm = previous?.distanceKm ?: 0f
         val distDiff = (result?.distanceKm ?: 0f) - lastKm
         val distDiffStr = if (distDiff >= 0) "+%.1fkm ↑".format(distDiff)
@@ -73,13 +80,9 @@ class PostRunViewModel @Inject constructor(
             recordId      = current?.id,
             selectedEffort = effort,
             coachHeadline = if (effort != null && cache.coachReasons.isNotEmpty()) cache.aiMessage else null,
-            reflection    = ReflectionCoach.reflect(
-                RunPatternAnalyzer.profile(
-                    cache.recentRecords.map {
-                        PatternRun(it.date, it.distanceKm, it.durationSec, it.avgHeartRate, it.splitsSec)
-                    }
-                )
-            )
+            reflection    = ReflectionCoach.reflect(RunPatternAnalyzer.profile(patternRuns)),
+            loadSummary   = load.summary,
+            loadWarning   = load.status == LoadStatus.CAUTION || load.status == LoadStatus.OVERLOAD
         )
     }.stateIn(viewModelScope, SharingStarted.WhileSubscribed(5000), PostRunUiState())
 

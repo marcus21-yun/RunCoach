@@ -27,6 +27,7 @@ import com.runcoach.wear.BuildConfig
 import dagger.hilt.android.lifecycle.HiltViewModel
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
+import kotlinx.coroutines.flow.first
 import kotlinx.coroutines.launch
 import javax.inject.Inject
 
@@ -35,7 +36,8 @@ import javax.inject.Inject
 @HiltViewModel
 class CoachStyleViewModel @Inject constructor(
     application: Application,
-    private val supabaseSync: SupabaseSyncService
+    private val supabaseSync: SupabaseSyncService,
+    private val wearDataStore: WearDataStore
 ) : AndroidViewModel(application) {
 
     private val repository = BriefingRepository(
@@ -46,7 +48,14 @@ class CoachStyleViewModel @Inject constructor(
     private val _selectedStyle = MutableStateFlow(CoachStyle.MOM)
     val selectedStyle: StateFlow<CoachStyle> = _selectedStyle
 
+    // 나이: 실력 판단이 아니라 회복 간격·심박 기준에만 사용 (미입력 가능)
+    private val _age = MutableStateFlow<Int?>(null)
+    val age: StateFlow<Int?> = _age
+
     init {
+        viewModelScope.launch {
+            _age.value = wearDataStore.getCachedData().first().userAge
+        }
         viewModelScope.launch {
             // Supabase에서 최신 코치 스타일 가져오기 → 없으면 로컬 DataStore 사용
             val remoteStyle = kotlinx.coroutines.withContext(kotlinx.coroutines.Dispatchers.IO) {
@@ -59,6 +68,17 @@ class CoachStyleViewModel @Inject constructor(
                 _selectedStyle.value = repository.loadCoachStyle()
             }
         }
+    }
+
+    /** null이면 미입력. 처음 조정할 때는 40세부터 시작 */
+    fun changeAge(delta: Int?) {
+        val next = when {
+            delta == null -> null
+            _age.value == null -> 40
+            else -> (_age.value!! + delta).coerceIn(15, 90)
+        }
+        _age.value = next
+        viewModelScope.launch { wearDataStore.saveUserAge(next) }
     }
 
     fun selectStyle(style: CoachStyle) {
@@ -81,6 +101,7 @@ fun CoachStyleSettingsScreen(
     viewModel: CoachStyleViewModel = hiltViewModel()
 ) {
     val selected by viewModel.selectedStyle.collectAsState()
+    val age by viewModel.age.collectAsState()
 
     Scaffold(
         modifier = Modifier.fillMaxSize(),
@@ -111,6 +132,15 @@ fun CoachStyleSettingsScreen(
                     style = style,
                     isSelected = style == selected,
                     onClick = { viewModel.selectStyle(style) }
+                )
+            }
+
+            item {
+                AgeItem(
+                    age = age,
+                    onMinus = { viewModel.changeAge(-1) },
+                    onPlus = { viewModel.changeAge(+1) },
+                    onClear = { viewModel.changeAge(null) }
                 )
             }
 
@@ -151,5 +181,43 @@ private fun StyleItem(
         if (isSelected) {
             Text(text = "✓", color = Color(0xFF00E676), fontSize = 13.sp, fontWeight = FontWeight.Bold)
         }
+    }
+}
+
+@Composable
+private fun AgeItem(
+    age: Int?,
+    onMinus: () -> Unit,
+    onPlus: () -> Unit,
+    onClear: () -> Unit
+) {
+    Column(
+        modifier = Modifier
+            .fillMaxWidth()
+            .background(Color(0xFF161D2E), RoundedCornerShape(12.dp))
+            .padding(horizontal = 12.dp, vertical = 8.dp),
+        horizontalAlignment = Alignment.CenterHorizontally
+    ) {
+        Text("나이 (심박·회복 기준용)", color = Color(0xFFB8C2D0), fontSize = 12.sp)
+        Row(
+            modifier = Modifier.fillMaxWidth(),
+            horizontalArrangement = Arrangement.SpaceBetween,
+            verticalAlignment = Alignment.CenterVertically
+        ) {
+            CompactButton(onClick = onMinus) { Text("−", fontSize = 16.sp) }
+            Text(
+                text = age?.let { "${it}세" } ?: "미입력",
+                color = Color(0xFFF0F4FF),
+                fontSize = 16.sp,
+                fontWeight = FontWeight.Bold,
+                modifier = Modifier.clickable(onClick = onClear)
+            )
+            CompactButton(onClick = onPlus) { Text("+", fontSize = 16.sp) }
+        }
+        Text(
+            if (age == null) "미입력 시 심박 150에서 호흡 안내" else "숫자를 누르면 미입력으로",
+            color = Color(0xFFB8C2D0),
+            fontSize = 12.sp
+        )
     }
 }

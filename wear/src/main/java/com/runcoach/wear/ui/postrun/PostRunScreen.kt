@@ -130,6 +130,19 @@ fun PostRunScreen(
             }
         }
 
+        // 무리하지 않는 패턴 — 기록 기반 수준과 이번 주 누적
+        state.loadSummary?.let { summary ->
+            item {
+                Text(
+                    "📊 $summary",
+                    modifier = Modifier.fillMaxWidth(),
+                    color = if (state.loadWarning) RcColors.Warning else RcColors.TextBody,
+                    style = RcType.Caption,
+                    textAlign = TextAlign.Center
+                )
+            }
+        }
+
         // 멘탈 코치 — 나의 패턴을 선수와 비교하고, 다른 사람과 나눌 이야깃거리 하나
         state.reflection?.let { reflection ->
             item { ReflectionCard(reflection) }

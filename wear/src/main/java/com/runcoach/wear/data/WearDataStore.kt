@@ -4,9 +4,11 @@ import android.content.Context
 import androidx.datastore.core.DataStore
 import androidx.datastore.preferences.core.Preferences
 import androidx.datastore.preferences.core.edit
+import androidx.datastore.preferences.core.intPreferencesKey
 import androidx.datastore.preferences.core.longPreferencesKey
 import androidx.datastore.preferences.core.stringPreferencesKey
 import androidx.datastore.preferences.preferencesDataStore
+import com.runcoach.core.coach.PatternRun
 import dagger.hilt.android.qualifiers.ApplicationContext
 import kotlinx.coroutines.flow.Flow
 import kotlinx.coroutines.flow.first
@@ -66,7 +68,18 @@ data class WearCache(
     val lastShareCode: String? = null,
     val lastSharePayload: String? = null,
     /** 기억하는 코치가 다음 목표를 제안한 근거 (폰 목표 수신 시 비움) */
-    val coachReasons: List<String> = emptyList()
+    val coachReasons: List<String> = emptyList(),
+    /** 사용자가 입력한 나이. 회복 간격·심박 기준에만 쓰고, 미입력이면 null */
+    val userAge: Int? = null
+)
+
+/** 패턴 분석·주간 누적 가드용 변환 */
+fun CachedRecord.toPatternRun() = PatternRun(
+    finishedAt = date,
+    distanceKm = distanceKm,
+    durationSec = durationSec,
+    avgHeartRate = avgHeartRate,
+    splitsSec = splitsSec
 )
 
 private val Context.dataStore: DataStore<Preferences> by preferencesDataStore("wear_cache")
@@ -88,6 +101,7 @@ class WearDataStore @Inject constructor(
         val KEY_LAST_SHARE_CODE = stringPreferencesKey("last_share_code")
         val KEY_LAST_SHARE_PAYLOAD = stringPreferencesKey("last_share_payload")
         val KEY_COACH_REASONS = stringPreferencesKey("coach_reasons")
+        val KEY_USER_AGE = intPreferencesKey("user_age")
 
         private const val MAX_RECORDS = 20
         private const val MAX_BRIEFINGS = 20
@@ -109,7 +123,8 @@ class WearDataStore @Inject constructor(
             phoneImportStatus = prefs[KEY_PHONE_IMPORT_STATUS],
             lastShareCode = prefs[KEY_LAST_SHARE_CODE],
             lastSharePayload = prefs[KEY_LAST_SHARE_PAYLOAD],
-            coachReasons = prefs[KEY_COACH_REASONS]?.let(::parseStrings).orEmpty()
+            coachReasons = prefs[KEY_COACH_REASONS]?.let(::parseStrings).orEmpty(),
+            userAge = prefs[KEY_USER_AGE]
         )
     }
 
@@ -145,6 +160,13 @@ class WearDataStore @Inject constructor(
 
         context.dataStore.edit { prefs ->
             prefs[KEY_RECENT_RECORDS] = recordsToJson(updated)
+        }
+    }
+
+    /** 나이 저장. null이면 삭제(미입력) */
+    suspend fun saveUserAge(age: Int?) {
+        context.dataStore.edit { prefs ->
+            if (age == null) prefs.remove(KEY_USER_AGE) else prefs[KEY_USER_AGE] = age
         }
     }
 

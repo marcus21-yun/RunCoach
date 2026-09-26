@@ -46,7 +46,9 @@ enum class CoachMode {
     /** 목표를 낮춰 회복 */
     EASE,
     /** 오래 쉰 뒤 복귀 */
-    RETURN
+    RETURN,
+    /** 이번 주 누적이 과함 — 쉬거나 아주 가볍게 */
+    REST
 }
 
 data class CoachPlan(
@@ -92,7 +94,45 @@ object MemoryCoach {
     fun plan(
         runs: List<RunSnapshot>,
         currentGoal: GoalSnapshot?,
-        now: Long = System.currentTimeMillis()
+        now: Long = System.currentTimeMillis(),
+        load: LoadAssessment? = null
+    ): CoachPlan = applyLoad(planIgnoringLoad(runs, currentGoal, now), load)
+
+    /**
+     * 주간 누적 가드를 적용한다. 이전 주 기록이 없으면(BUILDING) 판단 근거가 없어 적용하지 않는다.
+     */
+    private fun applyLoad(plan: CoachPlan, load: LoadAssessment?): CoachPlan {
+        if (load == null || load.status == LoadStatus.BUILDING) return plan
+        if (load.status == LoadStatus.OVERLOAD || load.remainingKm < MIN_KM) {
+            return CoachPlan(
+                mode = CoachMode.REST,
+                targetKm = MIN_KM,
+                targetPaceSec = plan.targetPaceSec?.plus(30),
+                speedupKm = 0f,
+                speedupPct = 0,
+                headline = "이번 주는 충분히 달렸어요. 쉬거나 ${fmtKm(MIN_KM)}km만 아주 가볍게 가요.",
+                reasons = listOf(
+                    load.summary,
+                    "주간 거리를 한 번에 30% 넘게 늘리면 부상 위험이 커져요."
+                )
+            )
+        }
+        if (plan.targetKm <= load.remainingKm) return plan
+        val km = roundKm(load.remainingKm)
+        return plan.copy(
+            mode = if (plan.mode == CoachMode.BUILD) CoachMode.HOLD else plan.mode,
+            targetKm = km,
+            speedupKm = 0f,
+            speedupPct = 0,
+            headline = "이번 주 여유에 맞춰 ${fmtKm(km)}km만 편하게 가요.",
+            reasons = plan.reasons + "이번 주 ${fmtKm(load.thisWeekKm)}km를 달려 권장 상한 ${fmtKm(load.weeklyCapKm)}km까지 ${fmtKm(km)}km 남았어요."
+        )
+    }
+
+    private fun planIgnoringLoad(
+        runs: List<RunSnapshot>,
+        currentGoal: GoalSnapshot?,
+        now: Long
     ): CoachPlan {
         val last = runs.firstOrNull() ?: return startPlan(currentGoal)
 

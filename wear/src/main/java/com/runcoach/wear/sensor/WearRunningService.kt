@@ -19,7 +19,7 @@ import androidx.health.services.client.data.WarmUpConfig
 import androidx.lifecycle.LifecycleService
 import androidx.lifecycle.lifecycleScope
 import com.google.android.gms.wearable.Wearable
-import com.runcoach.core.coach.HabitCoachConfig
+import com.runcoach.core.coach.LoadGuard
 import com.runcoach.core.coach.HabitPhrasebook
 import com.runcoach.core.coach.HabitSample
 import com.runcoach.core.coach.RunHabitCoach
@@ -30,11 +30,13 @@ import com.runcoach.wear.data.BriefingRepository
 import com.runcoach.wear.data.CachedGoal
 import com.runcoach.wear.data.CachedRecord
 import com.runcoach.wear.data.WearDataStore
+import com.runcoach.wear.data.toPatternRun
 import com.runcoach.wear.data.api.OpenAiApiService
 import com.runcoach.wear.data.model.CoachStyle
 import com.runcoach.wear.data.model.habitTone
 import com.runcoach.wear.tts.BriefingTtsManager
 import dagger.hilt.android.AndroidEntryPoint
+import kotlinx.coroutines.flow.first
 import kotlinx.coroutines.guava.await
 import kotlinx.coroutines.launch
 import org.json.JSONObject
@@ -306,19 +308,20 @@ class WearRunningService : LifecycleService() {
     /** 최근 기록의 반복 패턴과 선택한 코치 말투로 이번 러닝의 습관 코치를 준비한다. */
     private suspend fun prepareHabitCoach() {
         val goal = dataStore.getCurrentGoalSync()
-        val pattern = RunPatternAnalyzer.slowdownPattern(
-            dataStore.getRecordsSync().map { it.slowdownKm }
-        )
+        val records = dataStore.getRecordsSync()
+        val pattern = RunPatternAnalyzer.slowdownPattern(records.map { it.slowdownKm })
+        // 나이를 입력했으면 추정 최대심박 기준, 아니면 기본 150/160
+        val load = LoadGuard.assess(records.map { it.toPatternRun() }, dataStore.getCachedData().first().userAge)
         coachStyle = runCatching {
             BriefingRepository(this, OpenAiApiService(apiKey = BuildConfig.OPENAI_API_KEY)).loadCoachStyle()
         }.getOrDefault(CoachStyle.MOM)
         habitCoach = RunHabitCoach(
-            config = HabitCoachConfig(),
+            config = LoadGuard.habitConfig(load),
             targetPaceSec = paceToSecondsOrNull(goal?.targetPace),
             targetKm = goal?.targetKm,
             pattern = pattern
         )
-        Log.d(TAG, "habitCoach ready style=${coachStyle.id} pattern=$pattern")
+        Log.d(TAG, "habitCoach ready style=${coachStyle.id} pattern=$pattern breath=${load.breathingBpm} walk=${load.walkBpm}")
     }
 
     private fun coachHabit(sample: HabitSample) {
